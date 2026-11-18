@@ -1,38 +1,66 @@
 package com.ff6locke.gplayer
 
+import `is`.xyz.mpv.BaseMPVView
+import `is`.xyz.mpv.MPVLib
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
-import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import org.videolan.libvlc.LibVLC
-import org.videolan.libvlc.Media
-import org.videolan.libvlc.MediaPlayer
-import org.videolan.libvlc.util.VLCVideoLayout
+
+private class GPlayerMpvView(context: android.content.Context) :
+    BaseMPVView(context, null) {
+    override fun initOptions() {
+        MPVLib.setOptionString("profile", "fast")
+        MPVLib.setOptionString("vo", "gpu")
+        MPVLib.setOptionString("gpu-context", "android")
+        MPVLib.setOptionString("opengl-es", "yes")
+        MPVLib.setOptionString("hwdec", "auto-safe")
+        MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
+        MPVLib.setOptionString("ao", "audiotrack,opensles")
+        MPVLib.setOptionString("audio-exclusive", "no")
+        MPVLib.setOptionString("input-default-bindings", "yes")
+        MPVLib.setOptionString("osc", "no")
+        MPVLib.setOptionString("terminal", "no")
+        MPVLib.setOptionString("config", "no")
+        MPVLib.setOptionString("cache", "yes")
+        MPVLib.setOptionString("demuxer-max-bytes", "67108864")
+        MPVLib.setOptionString("demuxer-max-back-bytes", "67108864")
+        MPVLib.setOptionString("sub-auto", "fuzzy")
+        MPVLib.setOptionString("audio-file-auto", "fuzzy")
+    }
+
+    override fun postInitOptions() {
+        MPVLib.setOptionString("save-position-on-quit", "no")
+    }
+
+    override fun observeProperties() {
+        MPVLib.observeProperty("time-pos", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
+        MPVLib.observeProperty("duration", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
+        MPVLib.observeProperty("pause", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
+        MPVLib.observeProperty("track-list", MPVLib.MpvFormat.MPV_FORMAT_NONE)
+    }
+}
 
 class MainActivity : Activity() {
-    private lateinit var root: LinearLayout
-    private lateinit var videoLayout: VLCVideoLayout
-    private lateinit var status: TextView
-    private var libVlc: LibVLC? = null
-    private var player: MediaPlayer? = null
-    private var playing = false
+    private var playerView: GPlayerMpvView? = null
+    private var initialized = false
     private val openVideoRequest = 4101
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         buildHome()
     }
 
     private fun buildHome() {
-        root = LinearLayout(this).apply {
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(48, 28, 48, 28)
@@ -44,8 +72,8 @@ class MainActivity : Activity() {
             setTextColor(0xFFFFFFFF.toInt())
             gravity = Gravity.CENTER
         }
-        status = TextView(this).apply {
-            text = "Media player for Android TV"
+        val status = TextView(this).apply {
+            text = "mpv playback engine • 32-bit ARM"
             textSize = 16f
             setTextColor(0xFFB8C0CC.toInt())
             gravity = Gravity.CENTER
@@ -55,17 +83,9 @@ class MainActivity : Activity() {
             isFocusable = true
             setOnClickListener { openVideo() }
         }
-        val resume = Button(this).apply {
-            text = "Playback controls"
-            setOnClickListener {
-                if (playing) togglePlayback()
-                else Toast.makeText(this@MainActivity, "Open a video to start playback", Toast.LENGTH_SHORT).show()
-            }
-        }
         root.addView(title, matchWrap())
         root.addView(status, matchWrap())
         root.addView(open, LinearLayout.LayoutParams(320, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 28 })
-        root.addView(resume, LinearLayout.LayoutParams(320, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 12 })
         setContentView(root)
         open.requestFocus()
     }
@@ -78,12 +98,14 @@ class MainActivity : Activity() {
         startActivityForResult(intent, openVideoRequest)
     }
 
-    @Deprecated("Legacy result API retained for broad Android TV compatibility")
+    @Deprecated("Legacy result API retained for Android TV compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == openVideoRequest && resultCode == RESULT_OK) {
             data?.data?.let { uri ->
-                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                try {
+                    contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: SecurityException) {}
                 startPlayback(uri)
             }
         }
@@ -91,55 +113,63 @@ class MainActivity : Activity() {
 
     private fun startPlayback(uri: Uri) {
         try {
-            releasePlayer()
-            val vlc = LibVLC(this, arrayListOf("--no-video-title-show", "--audio-time-stretch"))
-            libVlc = vlc
-            player = MediaPlayer(vlc)
-            videoLayout = VLCVideoLayout(this)
-            videoLayout.setBackgroundColor(0xFF000000.toInt())
-            setContentView(videoLayout)
-            player?.attachViews(videoLayout, null, false, false)
-            val media = Media(vlc, uri)
-            player?.media = media
-            media.release()
-            player?.play()
-            playing = true
-            status.text = "Playing: $uri"
+            stopPlayback()
+            val view = GPlayerMpvView(this).apply {
+                setBackgroundColor(0xFF000000.toInt())
+                keepScreenOn = true
+            }
+            playerView = view
+            view.playFile(uri.toString())
+            view.initialize(filesDir.absolutePath, cacheDir.absolutePath)
+            initialized = true
+            setContentView(view)
+            view.requestFocus()
         } catch (e: Exception) {
-            Toast.makeText(this, "Unable to open video: ${e.message}", Toast.LENGTH_LONG).show()
+            stopPlayback()
+            Toast.makeText(this, "mpv could not start: ${e.message}", Toast.LENGTH_LONG).show()
             buildHome()
         }
     }
 
-    private fun togglePlayback() {
-        val p = player ?: return
-        if (p.isPlaying) p.pause() else p.play()
+    private fun stopPlayback() {
+        val view = playerView
+        playerView = null
+        if (initialized && view != null) {
+            try { view.destroy() } catch (_: Exception) {}
+        }
+        initialized = false
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (player != null) {
+        if (playerView != null) {
             when (keyCode) {
-                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_DPAD_CENTER -> { togglePlayback(); return true }
-                KeyEvent.KEYCODE_BACK -> { releasePlayer(); buildHome(); return true }
-                KeyEvent.KEYCODE_DPAD_LEFT -> { player?.time = (player?.time ?: 0L) - 10_000L; return true }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> { player?.time = (player?.time ?: 0L) + 10_000L; return true }
+                KeyEvent.KEYCODE_BACK -> { stopPlayback(); buildHome(); return true }
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_DPAD_CENTER -> {
+                    MPVLib.command(arrayOf("cycle", "pause")); return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    MPVLib.command(arrayOf("seek", "-10", "relative")); return true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    MPVLib.command(arrayOf("seek", "10", "relative")); return true
+                }
+                KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                    MPVLib.command(arrayOf("seek", "-30", "relative")); return true
+                }
+                KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                    MPVLib.command(arrayOf("seek", "30", "relative")); return true
+                }
             }
         }
         return super.onKeyDown(keyCode, event)
     }
 
-    private fun releasePlayer() {
-        playing = false
-        try { player?.stop(); player?.detachViews(); player?.release() } catch (_: Exception) {}
-        try { libVlc?.release() } catch (_: Exception) {}
-        player = null
-        libVlc = null
-    }
-
-    private fun matchWrap() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    private fun matchWrap() = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+    )
 
     override fun onDestroy() {
-        releasePlayer()
+        stopPlayback()
         super.onDestroy()
     }
 }
