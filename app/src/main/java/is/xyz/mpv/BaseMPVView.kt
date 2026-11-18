@@ -63,7 +63,7 @@ abstract class BaseMPVView(context: Context, attrs: AttributeSet?) : SurfaceView
         this.filePath = filePath
     }
 
-    private var voInUse: String = "gpu"
+    private var voInUse: String = "mediacodec_embed"
 
     /**
      * Sets the VO to use.
