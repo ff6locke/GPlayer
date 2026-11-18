@@ -24,8 +24,8 @@ private class GPlayerMpvView(context: android.content.Context) :
         MPVLib.setOptionString("vo", "gpu")
         MPVLib.setOptionString("gpu-context", "android")
         MPVLib.setOptionString("opengl-es", "yes")
-        MPVLib.setOptionString("hwdec", "auto-safe")
-        MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
+         // Diagnostic fallback: bypass GX1 hardware video decoding until picture output is confirmed.
+        MPVLib.setOptionString("hwdec", "no")
         MPVLib.setOptionString("ao", "audiotrack,opensles")
         MPVLib.setOptionString("audio-exclusive", "no")
         MPVLib.setOptionString("input-default-bindings", "yes")
@@ -157,10 +157,11 @@ class MainActivity : Activity() {
                 keepScreenOn = true
             }
             playerView = view
+            // Attach the SurfaceView before initializing mpv so its SurfaceHolder is ready.
+            setContentView(view)
             view.playFile(filePath)
             view.initialize(filesDir.absolutePath, cacheDir.absolutePath)
             initialized = true
-            setContentView(view)
             view.requestFocus()
         } catch (e: Exception) {
             stopPlayback()
