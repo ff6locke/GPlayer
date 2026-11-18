@@ -10,6 +10,7 @@ import java.io.File
 import java.io.FileOutputStream
 import android.os.Bundle
 import android.view.Gravity
+import android.widget.FrameLayout
 import android.view.KeyEvent
 import android.view.ViewGroup
 import android.widget.Button
@@ -19,7 +20,20 @@ import android.widget.Toast
 
 private class GPlayerMpvView(context: android.content.Context) :
     BaseMPVView(context, null) {
+    var diagnostic: ((String) -> Unit)? = null
+    private val mpvLogObserver = object : MPVLib.LogObserver {
+        override fun logMessage(prefix: String, level: Int, text: String) {
+            if (level <= MPVLib.MpvLogLevel.MPV_LOG_LEVEL_WARN) {
+                val line = "$prefix [$level] $text"
+                android.util.Log.w("GPlayer-MPV", line)
+                post { diagnostic?.invoke(line.takeLast(220)) }
+            }
+        }
+    }
+
     override fun initOptions() {
+        MPVLib.addLogObserver(mpvLogObserver)
+        MPVLib.setOptionString("msg-level", "all=info")
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString("vo", "mediacodec_embed")
         // Direct Android Surface output: bypasses the OpenGL/GPU renderer.
@@ -161,7 +175,23 @@ class MainActivity : Activity() {
             view.playFile(filePath)
             view.initialize(filesDir.absolutePath, cacheDir.absolutePath)
             initialized = true
-            setContentView(view)
+            val playbackRoot = FrameLayout(this)
+            playbackRoot.addView(view, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            ))
+            val diagnostics = TextView(this).apply {
+                text = "MPV starting…"
+                textSize = 11f
+                setTextColor(0xFFFFD180.toInt())
+                setBackgroundColor(0x99000000.toInt())
+                setPadding(10, 6, 10, 6)
+            }
+            playbackRoot.addView(diagnostics, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP
+            ))
+            view.diagnostic = { line -> diagnostics.text = line }
+            setContentView(playbackRoot)
             view.requestFocus()
         } catch (e: Exception) {
             stopPlayback()
