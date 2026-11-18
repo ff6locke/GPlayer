@@ -157,11 +157,13 @@ class MainActivity : Activity() {
                 keepScreenOn = true
             }
             playerView = view
-            // Attach the SurfaceView before initializing mpv so its SurfaceHolder is ready.
-            setContentView(view)
+            // Register the SurfaceHolder callback before the view is attached.
+            // SurfaceView may create its surface immediately when added to the window;
+            // registering afterward can miss surfaceCreated(), leaving video output black.
             view.playFile(filePath)
             view.initialize(filesDir.absolutePath, cacheDir.absolutePath)
             initialized = true
+            setContentView(view)
             view.requestFocus()
         } catch (e: Exception) {
             stopPlayback()
