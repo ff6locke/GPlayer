@@ -21,11 +21,9 @@ private class GPlayerMpvView(context: android.content.Context) :
     BaseMPVView(context, null) {
     override fun initOptions() {
         MPVLib.setOptionString("profile", "fast")
-        MPVLib.setOptionString("vo", "gpu")
-        MPVLib.setOptionString("gpu-context", "android")
-        MPVLib.setOptionString("opengl-es", "yes")
-         // Diagnostic fallback: bypass GX1 hardware video decoding until picture output is confirmed.
-        MPVLib.setOptionString("hwdec", "mediacodec-copy")
+        MPVLib.setOptionString("vo", "mediacodec_embed")
+        // Direct Android Surface output: bypasses the OpenGL/GPU renderer.
+        MPVLib.setOptionString("hwdec", "mediacodec")
         MPVLib.setOptionString("ao", "audiotrack,opensles")
         MPVLib.setOptionString("audio-exclusive", "no")
         MPVLib.setOptionString("input-default-bindings", "yes")
