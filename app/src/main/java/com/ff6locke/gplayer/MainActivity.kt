@@ -149,7 +149,8 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    private fun startPlayback(filePath: String) {\n        try {
+    private fun startPlayback(filePath: String) {
+        try {
             stopPlayback()
             val view = GPlayerMpvView(this).apply {
                 setBackgroundColor(0xFF000000.toInt())
