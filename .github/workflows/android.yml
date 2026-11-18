@@ -20,11 +20,32 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Fetch 32-bit mpv native runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/jniLibs/armeabi-v7a
+          curl -fL --retry 3 \
+            https://github.com/mpv-android/mpv-android/releases/download/2026-09-17/app-default-armeabi-v7a-release.apk \
+            -o /tmp/mpv-armv7-release.apk
+          unzip -j -o /tmp/mpv-armv7-release.apk 'lib/armeabi-v7a/*.so' -d app/src/main/jniLibs/armeabi-v7a
+          test -s app/src/main/jniLibs/armeabi-v7a/libmpv.so
+          test -s app/src/main/jniLibs/armeabi-v7a/libplayer.so
+          echo "Bundled native libraries:"
+          ls -lh app/src/main/jniLibs/armeabi-v7a
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
+      - name: Verify APK ABI
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          unzip -l "$APK" | grep 'lib/armeabi-v7a/'
+          if unzip -l "$APK" | grep -Eq 'lib/(arm64-v8a|x86|x86_64)/'; then
+            echo "Unexpected non-32-bit ABI found" >&2
+            exit 1
+          fi
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GPlayer-debug-apk
+          name: GPlayer-mpv-arm32-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
