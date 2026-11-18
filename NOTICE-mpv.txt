@@ -1,0 +1,10 @@
+GPlayer includes the Android JNI bridge source from mpv-android:
+https://github.com/mpv-android/mpv-android
+
+The MPVLib.kt and BaseMPVView.kt files are used under the upstream project's MIT license.
+The mpv native runtime is downloaded at build time from the mpv-android 2026-09-17 ARMv7 release APK:
+https://github.com/mpv-android/mpv-android/releases/tag/2026-09-17
+
+The native runtime contains mpv, FFmpeg, and related third-party components. Their respective
+licenses and source obligations are governed by the license notices distributed by the upstream
+mpv-android project and the upstream projects. This notice does not replace those licenses.
