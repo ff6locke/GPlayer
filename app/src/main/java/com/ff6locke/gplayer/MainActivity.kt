@@ -5,6 +5,9 @@ import `is`.xyz.mpv.MPVLib
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
+import java.io.File
+import java.io.FileOutputStream
 import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
@@ -51,6 +54,7 @@ private class GPlayerMpvView(context: android.content.Context) :
 class MainActivity : Activity() {
     private var playerView: GPlayerMpvView? = null
     private var initialized = false
+    private var isCopyingVideo = false
     private val openVideoRequest = 4101
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -106,20 +110,53 @@ class MainActivity : Activity() {
                 try {
                     contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 } catch (_: SecurityException) {}
-                startPlayback(uri)
+                copyAndStartPlayback(uri)
             }
         }
     }
 
-    private fun startPlayback(uri: Uri) {
-        try {
+    private fun copyAndStartPlayback(uri: Uri) {
+        if (isCopyingVideo) return
+        isCopyingVideo = true
+        Toast.makeText(this, "Preparing video…", Toast.LENGTH_SHORT).show()
+
+        Thread {
+            var copiedFile: File? = null
+            try {
+                val displayName = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    } ?: "selected-video"
+                val safeName = displayName.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
+                val extension = safeName.substringAfterLast('.', "")
+                val target = File(cacheDir, "playback_input" + if (extension.isNotBlank()) ".$extension" else ".video")
+                contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(target).use { output -> input.copyTo(output) }
+                } ?: throw IllegalStateException("Cannot read selected video")
+                if (!target.exists() || target.length() == 0L) throw IllegalStateException("Selected video is empty")
+                copiedFile = target
+                runOnUiThread {
+                    isCopyingVideo = false
+                    startPlayback(target.absolutePath)
+                }
+            } catch (e: Exception) {
+                copiedFile?.delete()
+                runOnUiThread {
+                    isCopyingVideo = false
+                    Toast.makeText(this, "Cannot open video: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun startPlayback(filePath: String) {\n        try {
             stopPlayback()
             val view = GPlayerMpvView(this).apply {
                 setBackgroundColor(0xFF000000.toInt())
                 keepScreenOn = true
             }
             playerView = view
-            view.playFile(uri.toString())
+            view.playFile(filePath)
             view.initialize(filesDir.absolutePath, cacheDir.absolutePath)
             initialized = true
             setContentView(view)
