@@ -1,0 +1,18 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
+android {
+    namespace = "com.ff6locke.gplayer"
+    compileSdk = 35
+    defaultConfig {
+        applicationId = "com.ff6locke.gplayer"
+        minSdk = 23
+        targetSdk = 28
+        versionCode = 1
+        versionName = "1.0"
+    }
+}
+dependencies {
+    implementation("org.videolan.android:libvlc-all:3.6.0")
+}
