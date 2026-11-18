@@ -92,13 +92,14 @@ class MainActivity : Activity() {
     private fun startPlayback(uri: Uri) {
         try {
             releasePlayer()
-            libVlc = LibVLC(this, arrayListOf("--no-video-title-show", "--audio-time-stretch"))
-            player = MediaPlayer(libVlc)
+            val vlc = LibVLC(this, arrayListOf("--no-video-title-show", "--audio-time-stretch"))
+            libVlc = vlc
+            player = MediaPlayer(vlc)
             videoLayout = VLCVideoLayout(this)
             videoLayout.setBackgroundColor(0xFF000000.toInt())
             setContentView(videoLayout)
             player?.attachViews(videoLayout, null, false, false)
-            val media = Media(libVlc, uri)
+            val media = Media(vlc, uri)
             player?.media = media
             media.release()
             player?.play()
